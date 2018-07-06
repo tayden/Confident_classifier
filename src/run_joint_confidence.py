@@ -29,6 +29,7 @@ parser.add_argument('--log-interval', type=int, default=100, help='how many batc
 parser.add_argument('--dataset', default='svhn', help='cifar10 | svhn')
 parser.add_argument('--dataroot', required=True, help='path to dataset')
 parser.add_argument('--imageSize', type=int, default=32, help='the height / width of the input image to network')
+parser.add_argument('--channels', type=int, default=3, help='number of channels in the input image')
 parser.add_argument('--outf', default='.', help='folder to output images and model checkpoints')
 parser.add_argument('--wd', type=float, default=0.0, help='weight decay')
 parser.add_argument('--droprate', type=float, default=0.1, help='learning rate decay')
@@ -38,7 +39,7 @@ parser.add_argument('--beta', type=float, default=1, help='penalty parameter for
 
 args = parser.parse_args()
 
-if args.dataset == 'cifar10':
+if args.dataset in ['cifar10', 'cifar100']:
     args.beta = 0.1
     args.batch_size = 64
     
@@ -56,13 +57,13 @@ print('load data: ',args.dataset)
 train_loader, test_loader = data_loader.getTargetDataSet(args.dataset, args.batch_size, args.imageSize, args.dataroot)
 
 print('Load model')
-model = models.vgg13()
+model = models.vgg13(num_classes=args.num_classes)
 print(model)
 
 print('load GAN')
 nz = 100
-netG = models.Generator(1, nz, 64, 3) # ngpu, nz, ngf, nc
-netD = models.Discriminator(1, 3, 64) # ngpu, nc, ndf
+netG = models.Generator(1, nz, 64, args.channels) # ngpu, nz, ngf, nc
+netD = models.Discriminator(1, args.channels, 64) # ngpu, nc, ndf
 # Initial setup for GAN
 real_label = 1
 fake_label = 0
@@ -175,11 +176,13 @@ def test(epoch):
         total += data.size(0)
         if args.cuda:
             data, target = data.cuda(), target.cuda()
-        data, target = Variable(data, volatile=True), Variable(target)
-        output = F.log_softmax(model(data))
-        test_loss += F.nll_loss(output, target).data[0]
-        pred = output.data.max(1)[1] # get the index of the max log-probability
-        correct += pred.eq(target.data).cpu().sum()
+        
+        with torch.no_grad():
+            data, target = Variable(data), Variable(target)
+            output = F.log_softmax(model(data))
+            test_loss += F.nll_loss(output, target).data[0]
+            pred = output.data.max(1)[1] # get the index of the max log-probability
+            correct += pred.eq(target.data).cpu().sum()
 
     test_loss = test_loss
     test_loss /= len(test_loader) # loss function already averages over batch size
