@@ -50,7 +50,7 @@ def getSVHN(batch_size, img_size=32, data_root='/tmp/public_dataset/pytorch', tr
     return ds
 
 def getMNIST(batch_size, img_size=28, data_root='/tmp/public_dataset/pytorch', train=True, val=True, **kwargs):
-    data_root = os.path.expanduser(os.path.join(data_root, 'mnist-data'))
+    data_root = os.path.expanduser(os.path.join(data_root, 'mnist5'))
     num_workers = kwargs.setdefault('num_workers', 1)
     kwargs.pop('input_size', None)
     print("Building MNIST data loader with {} workers".format(num_workers))
@@ -60,8 +60,9 @@ def getMNIST(batch_size, img_size=28, data_root='/tmp/public_dataset/pytorch', t
             datasets.MNIST(
                 root=data_root, train=True, download=True,
                 transform=transforms.Compose([
-                    transforms.Scale(img_size),
+                    transforms.Resize(img_size),
                     transforms.ToTensor(),
+                    transforms.Lambda(lambda x: x.expand(3, -1, -1)) # Expand to 3 channels to work with VGG model
                 ])),
             batch_size=batch_size, shuffle=True, **kwargs)
         ds.append(train_loader)
@@ -70,8 +71,40 @@ def getMNIST(batch_size, img_size=28, data_root='/tmp/public_dataset/pytorch', t
             datasets.MNIST(
                 root=data_root, train=False, download=True,
                 transform=transforms.Compose([
-                    transforms.Scale(img_size),
+                    transforms.Resize(img_size),
                     transforms.ToTensor(),
+                    transforms.Lambda(lambda x: x.expand(3, -1, -1)) # Expand to 3 channels to work with VGG model
+                ])),
+            batch_size=batch_size, shuffle=False, **kwargs)
+        ds.append(test_loader)
+    ds = ds[0] if len(ds) == 1 else ds
+    return ds
+
+def getMNIST5(batch_size, img_size=28, data_root='/tmp/public_dataset/pytorch', train=True, val=True, **kwargs):
+    data_root = os.path.expanduser(os.path.join(data_root, 'mnist5'))
+    num_workers = kwargs.setdefault('num_workers', 1)
+    kwargs.pop('input_size', None)
+    print("Building MNIST 5 data loader with {} workers".format(num_workers))
+    ds = []
+    if train:
+        train_loader = torch.utils.data.DataLoader(
+            datasets.ImageFolder(
+                root="{}/train".format(data_root),
+                transform=transforms.Compose([
+                    transforms.Resize(img_size),
+                    transforms.ToTensor(),
+                    transforms.Lambda(lambda x: x.expand(3, -1, -1)) # Expand to 3 channels to work with VGG model
+                ])),
+            batch_size=batch_size, shuffle=True, **kwargs)
+        ds.append(train_loader)
+    if val:
+        test_loader = torch.utils.data.DataLoader(
+            datasets.ImageFolder(
+                root="{}/test".format(data_root),
+                transform=transforms.Compose([
+                    transforms.Resize(img_size),
+                    transforms.ToTensor(),
+                    transforms.Lambda(lambda x: x.expand(3, -1, -1)) # Expand to 3 channels to work with VGG model
                 ])),
             batch_size=batch_size, shuffle=False, **kwargs)
         ds.append(test_loader)
@@ -137,15 +170,15 @@ def getCIFAR100(batch_size, img_size=32, data_root='/tmp/public_dataset/pytorch'
     return ds
 
 def getCIFAR80(batch_size, img_size=32, data_root='/tmp/public_dataset/pytorch', train=True, val=True, **kwargs):
-    data_root = os.path.expanduser(os.path.join(data_root, 'cifar80-data'))
+    data_root = os.path.expanduser(os.path.join(data_root, 'cifar80'))
     num_workers = kwargs.setdefault('num_workers', 1)
     kwargs.pop('input_size', None)
     print("Building CIFAR-80 data loader with {} workers".format(num_workers))
     ds = []
     if train:
         train_loader = torch.utils.data.DataLoader(
-            datasets.CIFAR100(
-                root=data_root, train=True, download=True,
+            datasets.ImageFolder(
+                root="{}/train".format(data_root),
                 transform=transforms.Compose([
                     transforms.Resize(img_size),
                     transforms.ToTensor(),
@@ -154,8 +187,8 @@ def getCIFAR80(batch_size, img_size=32, data_root='/tmp/public_dataset/pytorch',
         ds.append(train_loader)
     if val:
         test_loader = torch.utils.data.DataLoader(
-            datasets.CIFAR100(
-                root=data_root, train=False, download=True,
+            datasets.ImageFolder(
+                root="{}/test".format(data_root),
                 transform=transforms.Compose([
                     transforms.Resize(img_size),
                     transforms.ToTensor(),
@@ -165,14 +198,46 @@ def getCIFAR80(batch_size, img_size=32, data_root='/tmp/public_dataset/pytorch',
     ds = ds[0] if len(ds) == 1 else ds
     return ds
 
+def getCIFAR20(batch_size, img_size=32, data_root='/tmp/public_dataset/pytorch', train=True, val=True, **kwargs):
+    data_root = os.path.expanduser(os.path.join(data_root, 'cifar20'))
+    num_workers = kwargs.setdefault('num_workers', 1)
+    kwargs.pop('input_size', None)
+    print("Building CIFAR-20 data loader with {} workers".format(num_workers))
+    ds = []
+    if train:
+        train_loader = torch.utils.data.DataLoader(
+            datasets.ImageFolder(
+                root="{}/train".format(data_root),
+                transform=transforms.Compose([
+                    transforms.Resize(img_size),
+                    transforms.ToTensor(),
+                ])),
+            batch_size=batch_size, shuffle=True, **kwargs)
+        ds.append(train_loader)
+    if val:
+        test_loader = torch.utils.data.DataLoader(
+            datasets.ImageFolder(
+                root="{}/test".format(data_root),
+                transform=transforms.Compose([
+                    transforms.Resize(img_size),
+                    transforms.ToTensor(),
+                ])),
+            batch_size=batch_size, shuffle=False, **kwargs)
+        ds.append(test_loader)
+    ds = ds[0] if len(ds) == 1 else ds
+    return ds
 
 def getTargetDataSet(data_type, batch_size, imageSize, dataroot):
     if data_type == 'mnist':
         train_loader, test_loader = getMNIST(batch_size=batch_size, img_size=imageSize, data_root=dataroot, num_workers=1)
+    elif data_type == 'mnist5':
+        _, test_loader = getMNIST5(batch_size=batch_size, img_size=imageSize, data_root=dataroot, num_workers=1)
     elif data_type == 'cifar10':
         train_loader, test_loader = getCIFAR10(batch_size=batch_size, img_size=imageSize, data_root=dataroot, num_workers=1)
-    if data_type == 'cifar100':
+    elif data_type == 'cifar100':
         train_loader, test_loader = getCIFAR100(batch_size=batch_size, img_size=imageSize, data_root=dataroot, num_workers=1)
+    elif data_type == 'cifar80':
+        train_loader, test_loader = getCIFAR80(batch_size=batch_size, img_size=imageSize, data_root=dataroot, num_workers=1)
     elif data_type == 'svhn':
         train_loader, test_loader = getSVHN(batch_size=batch_size, img_size=imageSize, data_root=dataroot, num_workers=1)
 
@@ -181,10 +246,16 @@ def getTargetDataSet(data_type, batch_size, imageSize, dataroot):
 def getNonTargetDataSet(data_type, batch_size, imageSize, dataroot):
     if data_type == 'mnist':
         _, test_loader = getMNIST(batch_size=batch_size, img_size=imageSize, data_root=dataroot, num_workers=1)
+    elif data_type == 'mnist5':
+        _, test_loader = getMNIST5(batch_size=batch_size, img_size=imageSize, data_root=dataroot, num_workers=1)
     elif data_type == 'cifar10':
         _, test_loader = getCIFAR10(batch_size=batch_size, img_size=imageSize, data_root=dataroot, num_workers=1)
     elif data_type == 'cifar100':
         _, test_loader = getCIFAR100(batch_size=batch_size, img_size=imageSize, data_root=dataroot, num_workers=1)
+    elif data_type == 'cifar80':
+        _, test_loader = getCIFAR80(batch_size=batch_size, img_size=imageSize, data_root=dataroot, num_workers=1)
+    elif data_type == 'cifar20':
+        _, test_loader = getCIFAR20(batch_size=batch_size, img_size=imageSize, data_root=dataroot, num_workers=1)
     elif data_type == 'svhn':
         _, test_loader = getSVHN(batch_size=batch_size, img_size=imageSize, data_root=dataroot, num_workers=1)
     elif data_type == 'imagenet':

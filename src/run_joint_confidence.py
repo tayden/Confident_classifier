@@ -26,10 +26,9 @@ parser.add_argument('--lr', type=float, default=0.0002, help='learning rate')
 parser.add_argument('--no-cuda', action='store_true', default=False, help='disables CUDA training')
 parser.add_argument('--seed', type=int, default=1, help='random seed')
 parser.add_argument('--log-interval', type=int, default=100, help='how many batches to wait before logging training status')
-parser.add_argument('--dataset', default='svhn', help='cifar10 | svhn')
+parser.add_argument('--dataset', default='svhn', help='cifar10 | cifar100 | mnist | svhn')
 parser.add_argument('--dataroot', required=True, help='path to dataset')
 parser.add_argument('--imageSize', type=int, default=32, help='the height / width of the input image to network')
-parser.add_argument('--channels', type=int, default=3, help='number of channels in the input image')
 parser.add_argument('--outf', default='.', help='folder to output images and model checkpoints')
 parser.add_argument('--wd', type=float, default=0.0, help='weight decay')
 parser.add_argument('--droprate', type=float, default=0.1, help='learning rate decay')
@@ -39,7 +38,7 @@ parser.add_argument('--beta', type=float, default=1, help='penalty parameter for
 
 args = parser.parse_args()
 
-if args.dataset in ['cifar10', 'cifar100']:
+if args.dataset in ['cifar10', 'cifar100', 'cifar80']:
     args.beta = 0.1
     args.batch_size = 64
     
@@ -62,13 +61,13 @@ print(model)
 
 print('load GAN')
 nz = 100
-netG = models.Generator(1, nz, 64, args.channels) # ngpu, nz, ngf, nc
-netD = models.Discriminator(1, args.channels, 64) # ngpu, nc, ndf
+netG = models.Generator(1, nz, 64, 3) # ngpu, nz, ngf, nc
+netD = models.Discriminator(1, 3, 64) # ngpu, nc, ndf
 # Initial setup for GAN
 real_label = 1
 fake_label = 0
 criterion = nn.BCELoss()
-fixed_noise = torch.FloatTensor(64, nz, 1, 1).normal_(0, 1)
+fixed_noise = torch.Tensor(64, nz, 1, 1).normal_(0, 1)
 
 if args.cuda:
     model.cuda()
@@ -88,7 +87,7 @@ def train(epoch):
     model.train()
     for batch_idx, (data, target) in enumerate(train_loader):
 
-        gan_target = torch.FloatTensor(target.size()).fill_(0)
+        gan_target = torch.Tensor(target.size()).fill_(0)
         uniform_dist = torch.Tensor(data.size(0), args.num_classes).fill_((1./args.num_classes))
 
         if args.cuda:
@@ -110,7 +109,7 @@ def train(epoch):
         D_x = output.data.mean()
 
         # train with fake
-        noise = torch.FloatTensor(data.size(0), nz, 1, 1).normal_(0, 1).cuda()
+        noise = torch.Tensor(data.size(0), nz, 1, 1).normal_(0, 1).cuda()
         if args.cuda:
             noise = noise.cuda()
         noise = Variable(noise)
@@ -134,7 +133,7 @@ def train(epoch):
         D_G_z2 = output.data.mean()
 
         # minimize the true distribution
-        KL_fake_output = F.log_softmax(model(fake))
+        KL_fake_output = F.log_softmax(model(fake), dim=0)
         errG_KL = F.kl_div(KL_fake_output, uniform_dist)*args.num_classes
         generator_loss = errG + args.beta*errG_KL
         generator_loss.backward()
@@ -145,16 +144,16 @@ def train(epoch):
         ###########################
         # cross entropy loss
         optimizer.zero_grad()
-        output = F.log_softmax(model(data))
+        output = F.log_softmax(model(data), dim=0)
         loss = F.nll_loss(output, target)
 
         # KL divergence
-        noise = torch.FloatTensor(data.size(0), nz, 1, 1).normal_(0, 1).cuda()
+        noise = torch.Tensor(data.size(0), nz, 1, 1).normal_(0, 1).cuda()
         if args.cuda:
             noise = noise.cuda()
         noise = Variable(noise)
         fake = netG(noise)
-        KL_fake_output = F.log_softmax(model(fake))
+        KL_fake_output = F.log_softmax(model(fake), dim=0)
         KL_loss_fake = F.kl_div(KL_fake_output, uniform_dist)*args.num_classes
         total_loss = loss + args.beta*KL_loss_fake
         total_loss.backward()
@@ -163,7 +162,7 @@ def train(epoch):
         if batch_idx % args.log_interval == 0:
             print('Classification Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}, KL fake Loss: {:.6f}'.format(
                 epoch, batch_idx * len(data), len(train_loader.dataset),
-                100. * batch_idx / len(train_loader), loss.data[0], KL_loss_fake.data[0]))
+                100. * batch_idx / len(train_loader), loss.data.item(), KL_loss_fake.data.item()))
             fake = netG(fixed_noise)
             vutils.save_image(fake.data, '%s/gan_samples_epoch_%03d.png'%(args.outf, epoch), normalize=True)
 
@@ -179,8 +178,8 @@ def test(epoch):
         
         with torch.no_grad():
             data, target = Variable(data), Variable(target)
-            output = F.log_softmax(model(data))
-            test_loss += F.nll_loss(output, target).data[0]
+            output = F.log_softmax(model(data), dim=0)
+            test_loss += F.nll_loss(output, target).data.item()
             pred = output.data.max(1)[1] # get the index of the max log-probability
             correct += pred.eq(target.data).cpu().sum()
 
